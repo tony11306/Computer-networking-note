@@ -49,8 +49,9 @@ Client 若要與 server 聯繫，需要知道 server 的位址。Client 在主�
 當網路在傳遞資料的時候，為了要辨別資料是什麼，通常需要兩種東西: `Host 的位址`、`在接收端的辨別碼`。前者通常就是 `Ip address`，而後者就是使用 `port number`。Port number 的範圍為 2 bytes(0 ~ 65535)
 
 幾個常用的 port 有:
-- 80 port (Http協議通道)
-- 25 port (Mail協議通道)
+- 80 port (Http 協議通道)
+- 25 port (Mail 協議通道)
+- 443 port (Https 協議通道)
 
 
 
@@ -166,12 +167,210 @@ time = RTT + file transmission time
 ![response header](imgs/response-header.png)
 
 常見 Status code:
-- 200 success
-- 400 bad request
-- 404 not found
-- 500 internal server error
-- 505 http version not support
+- `200 success`
+- `400 bad request`
+- `404 not found`
+- `500 internal server error`
+- `505 http version not support`
 
 在 Header 中可以看到 `Keep-alive` 標籤，如果是 true 就是 persisten http，false 就是 non-persisten http。
 
 ### 2.2.4 Cookies
+
+由於 HTTP 有所謂的 `stateless` 的概念在，前一次的 http request 和下一次的 http request 不能有狀態的關聯，所以要用到類似狀態的功能 `Cookies` 就是相對應的功能。
+
+主要過程大概就是 server 第一次回應給客戶端的時候會給一個獨特的 cookie id，客戶端的瀏覽器會存儲這個 id，同時 server 後端的資料庫也會存儲這個 id，之後只要這個客戶端傳送的資料有 cookie id，那麼 server 就可以針對特定的 user 做相對應的動作，藉以達成 state 的概念。
+
+![coolies](imgs/cookies.png)
+
+### 2.2.5 Web caches (Proxy servers)
+
+Proxy server 會存儲一些資料，如果 proxy server 有客戶端需要的東西的話，那麼 proxy server 可以直接提供，否則 proxy server 會往 server 送一個完整的 request 來取得資料。
+
+通常會應用在當區域網的速度遠大於連接外網的速度時，由於連接外網的速度比較慢，這時候如果內網有一個類似佔存的東西在，那麼就可以直接在內網先看有沒有資料是可以直接回傳的，沒有再跟外網的伺服器去要。
+
+目前已很少見，這項技術是用在以前網路速度不夠快的時候，現在網頁的頻寬已經足夠了。
+
+補!!
+
+#### **Conditional GET**
+
+客戶端本身會存有 local cache，並且記錄上次的更新時間，客戶端往 server 送資料時會送一個有 if-modified-since header 的 request，如果 server 修改日期和客戶端 local cache 的一樣的話，那麼 server 就不會送東西回來，而客戶端會直接依據本身的 local cache 來顯示相對應的 object。
+
+![web caches](imgs/web-cache.png)
+
+### 2.2.6 HTTP/2
+
+> HTTP/2 是為了解決 first come first serve 的 HOL(Head of Line) blocking 問題。
+
+在 HTTP/1 時，為了解決這種 HOL blocking 的問題，通常都是開好幾條的平行 TCP 連線(假設有 n 條)，但是這樣的問題是每一個 TCP 連線頻寬都會被分成`總頻寬/n`的量，且有種作弊的手段是直接開好幾條的 TCP 連線只為了接收一個東西，這樣就可以把很多頻寬給佔走。
+
+HTTP/2 就是為了解決上面的問題，並且將 server 與 client 端的 socket 數量盡可能減少，較容易維護。
+
+#### **HTTP/2 Framing**
+
+HTTP/2 會把 server 的 response 切成很多塊，並且輪流送出。所以如果有一個很大的物件和一些小的物件，這些物件都會被切成許多片段，並且輪流送出，那些小物件就不需要等待一個大物件送出時才被處裡。
+
+
+#### **Response Message Prioritization and Server Pushing**
+
+HTTP/2 支援可以幫資料附上`Weight(權重)`，權重高的優先被傳送，這樣可以有效提高程式的效率。
+
+另一個 HTTP/2 支援的功能是客戶端可以只送一條 request，而 server 能夠送好幾條 response 給客戶端，如此就不需要等待客戶端一個一個的送 request。
+
+## 2.3 Electronic Mail in the Internet
+
+> Email 的構成主要有三個重要的核心:
+> - user agents: 指使用者發送電子郵件的軟體，例如 Microsoft Outlook、Gmail 等
+> - mail servers: 可以想像成郵局，內部存放著 `mail  box`、`message queue`
+> - SMTP: email 的通訊協議，是應用層的協議，是利用傳輸層的 TCP 搭構起來的。
+
+假如 Alice 要寄信給 Bob，一個訊息送出的過程大致如下:
+
+1. Alice 在自己的 `user agent` 寫好郵件，並傳給自己的 `mail server`，`mail server` 將資料放進 `message queue`。
+2. Alice 的 `mail server` 傳送信件給 Bob 的 `mail server`。
+3. Bob 的 `mail server` 將他的信件放在他的 `mail box`裡面。
+4. Bob 再到自己的 `mail box` 查看郵件。
+
+假如信件沒有成功寄到 Bob 的 mail server，那麼 Alice 的 mail server 會將信件`暫時放在 message queue`，並將再 30 分鐘內再寄一次。倘若過了好幾天都沒成功，那麼 Alice 的 mail server 會告訴 Alice 信件寄送失敗(將失敗通知信放到 Alice 的 mail box )，並且將那封信從 mail queue 移除。
+
+### 2.3.1 SMTP
+
+SMTP 是一個比 HTTP 還要古老的協議，SMTP 限制傳輸的資料必須要是 7-bit ASCII 的編碼，放在當今的角度，已經是十分過時的限制。
+
+在上面的步驟 2~3 中間可以再拆分成幾個細節:
+1. Alice 的 mail server 看到 message queue 有信件，會與 Bob 的 mail server 建立 TCP 連線。
+2. 經過一些 SMTP 握手程序，Alice 的 SMTP client 會把訊息放進 TCP connection。
+3. 最後 Bob 的那一端(SMTP server side)收到信件後再把信放到 Bob 的 mail box 裡面。
+
+最後是 SMTP 傳輸過程的範例
+
+    S:  220 hamburger.edu
+    C:  HELO crepes.fr
+    S:  250 Hello crepes.fr, pleased to meet you
+    C:  MAIL FROM: <alice@crepes.fr>
+    S:  250 alice@crepes.fr ... Sender ok
+    C:  RCPT TO: <bob@hamburger.edu>
+    S:  250 bob@hamburger.edu ... Recipient ok
+    C:  DATA
+    S:  354 Enter mail, end with ”.” on a line by itself
+    C:  Do you like ketchup?
+    C:  How about pickles?
+    C:  .
+    S:  250 Message accepted for delivery
+    C:  QUIT
+    S:  221 hamburger.edu closing connection
+
+### 2.3.2 Mail Message Formats
+
+header:
+- from: 
+- to: 
+- subject: 
+
+body: 
+
+
+### 2.3.3 Mail Access Protocols
+
+IMAP(Internt Mail Access Protocol)
+#待補
+
+## 2.4 DNS - The internet's Directory Service
+
+在一般世界中，每個人的身分證字號是獨一的，但是我們不會稱呼別人叫做 `Sxxxxxxxxx`，而是會稱呼別人的名字。在網路世界亦同，IP 位址就是身分證字號，而那個 IP 位址代表的名字我們會給他一個 hostname，例如 `www.google.com`、`www.facebook.com`。
+
+DNS(Domain Name System) 就是負責處理這個問題的。
+
+
+### 2.4.1 Services Provided by DNS
+
+DNS 的傳輸層協議是使用 UDP，並且使用 port 53。
+
+一般來說，當我們要拜訪一個網頁時，，那麼瀏覽器會將 URL 中的 hostname 傳送給 DNS server，DNS server 找到相對應的 Ip address 後回傳，瀏覽器再根據回傳的 Ip address 建立 TCP 連線。通常這些查表的結果會 cached 在附近的 DNS server，降低 delay。
+
+#### **Host aliasing**
+
+一個主機可能會有一個複雜的 hostname，這個複雜的 hostname 我們叫他 `canonical hostname(典範 hostname)`，可以理解為較正式的名稱。然而有時候他可能有其他的別名相對好記，DNS server 可以利用別名查詢找到相對應的`典範 hostname` 或是 ip address。
+13 台 root DNS
+
+#### **Mail server aliasing**
+
+大致上和 host aliasing 差不多，只是換成 email 的版本。
+
+#### **Load distribution(負載平衡)**
+
+DNS 還可以幫 hostname 設定多個 ip，自動分散網路流量，這樣對於一些較繁忙的網站可以分擔負荷。
+
+### 2.4.2 Overview of how DNS Works
+
+如果世界上只有一個 DNS server，那麼他每天將要負荷數以億計的網路流量，並且要記錄上百千萬個 hostname。除此之外，如果這個 DNS server 因為某些原因崩潰了，那就代表全世界的網路都崩潰了。
+
+#### **A Distributed, Hierarchical Database**
+
+為了避免上述問題，DNS 的 `root server` 在全世界有 13 台，並且整個 DNS 架構是採用`樹狀`的架構來管理分工。在 root server 下方還有分成管理 `.org`、`.net`、`.edu`、`.tw`、`.us`等..，這些較高層級的 DNS server 叫做 `TLD(Top-level domain servers)`。
+
+#### **Authoritative DNS servers**
+
+Authoritative DNS servers 是指提供查詢 hostname 對應到 ip address 的主機。通常每個大企業都至少會有一個，可能是花錢買或自己實作管理。
+
+
+#### **Local DNS server**
+
+Local DNS server 不隸屬於整個 DNS 的等級層級。如果是使用 ISP 業者提供的網路服務，那麼 local DNS server 會是由 ISP 提供。
+
+在 windows 系統的小黑窗打上 `ipconfig` 可以查詢自己的 dns server。
+
+![local DNS server](img/../imgs/local%20dns%20server.png)
+
+
+
+#### **iterated query / recursive query**
+
+![DNS server interactions](img/../imgs/dns%20servers%20interaction.png)
+
+在上面這張圖中，從 requesting host 到 local DNS server 是遞迴式的(recursive)，而local DNS server 與其他三台 DNS 的互動是迭代式(iterated)的。
+
+
+#### **DNS caching**
+
+當一台 DNS server 接收到另一台 DNS server 的答覆時，接收到的這台會先將這對 map 先存放到 local memory，這樣下次只要有同樣的 query 就可以直接回覆，而不需要再經過一次 iterated/recursive query。
+
+cache 的儲存時間差不多是 2 天。
+
+### 2.4.3 DNS Records and Messages
+
+DNS 存儲的資料為 RRs(resource records)，RRs 內包含了 hostname 到 Ip address 的 mapping。
+
+RRs 的儲存格式為 4-tuple 的資料 `(Name, Value, Type, TTL)`。
+
+- Type: 根據類別的不同 Name 和 Value 也有不同的意義
+  - `A`:
+    - Name: hostname
+    - Value: Ip address
+  - `NS`:
+    - Name: domain
+    - Value: 這個 domain 所對應到的 authoritative DNS server
+  - `CNAME`:
+    - Name: alias hostname
+    - Value: canoical hostname(典範 hostname)
+  - `MX`:
+    - Name: 針對 mail server 的 alias hostname
+    - Value: 針對 mail server 的 canoical hostname(典範 hostname)
+- TTL: 紀錄了 RRs 的儲存時間，時間一到就會被記憶體釋放。
+
+#### **DNS Messages**
+
+![DNS message format](img/../imgs/DNS%20message%20format.png)
+
+上圖中 12 bytes 的區域為 `header section`通常 1 bit 的區域都是代表一種 flag，表示 true or false，例如 `query/flag flag`、`recursive flag`...等。
+
+Question 的部分是 query 的詳細資料，例如 query 的 name 以及 type。
+
+Answer 的部分為 DNS server 回傳的 RRs。
+
+其他部分待補。
+
+一個 DNS query 可以傳回多筆 DNS messages。
+
+## 2.5 Peer-to-Peer File Distrubution
