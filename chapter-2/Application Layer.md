@@ -363,7 +363,7 @@ RRs 的儲存格式為 4-tuple 的資料 `(Name, Value, Type, TTL)`。
 
 ![DNS message format](img/../imgs/DNS%20message%20format.png)
 
-上圖中 12 bytes 的區域為 `header section`通常 1 bit 的區域都是代表一種 flag，表示 true or false，例如 `query/flag flag`、`recursive flag`...等。
+上圖中 12 bytes 的區域為 `header section`通常 1 bit 的區域都是代表一種 flag，表示 true or false，例如 `query/response flag`、`recursive flag`...等。
 
 Question 的部分是 query 的詳細資料，例如 query 的 name 以及 type。
 
@@ -374,3 +374,111 @@ Answer 的部分為 DNS server 回傳的 RRs。
 一個 DNS query 可以傳回多筆 DNS messages。
 
 ## 2.5 Peer-to-Peer File Distrubution
+
+P2P 是一個 `not always-on server` 的型式，peer 的 Ip 可以變動，相對的由於 Ip 會隨著時間不同，整體節點的管理會很複雜。主要應用有檔案分享 (BitTorrent) 以及通話連線 (Skype) 或串流 (KanKan)。
+
+
+### Scalability of P2P Architechures
+
+比較 P2P 和 client server 連線方式在用戶數量上升的對比:
+
+先假設`檔案大小為 F`、`伺服器上傳速率為 u`、`有 N 位用戶`、`第 i 位用戶的下載速率為 di`、`第 i 位用戶的上傳速度為 ui`。
+
+> #### client-server 主從架構
+
+伺服器上傳給一個用戶的時間即為
+![F/u](https://latex.codecogs.com/png.image?\dpi{110}%20\frac{F}{u})
+，上傳給 `N` 位使用者的時間則為
+![NF/u](https://latex.codecogs.com/png.image?\dpi{110}%20\frac{NF}{u})。
+
+已知第 `i` 位客戶的下載時間為 
+![di](https://latex.codecogs.com/png.image?\dpi{110}%20\frac{F}{d_i})
+，那麼 `N` 位使用者中，下載時間最長(下載速度最低的)用戶則為 
+![min of di](https://latex.codecogs.com/png.image?\dpi{110}%20\min_{d_1,\dots,%20d_i,%20\dots,%20d_N})
+，暫且稱他為 
+![dm](https://latex.codecogs.com/png.image?\dpi{110}%20d_m)。
+
+這邊有個重點，**「伺服器上傳時，客戶也在下載」**，這樣可以得知客戶下載速度不是跟 server 上傳速度快，不然就是比 server 上傳慢(因為瓶頸在 server)。下面是示意圖，紫色就是下載速度比 server 上傳慢。
+
+![](imgs/server%20upload%20client%20download.png)
+
+這樣可以得知 
+
+![](https://latex.codecogs.com/png.image?\dpi{110}%20DistributionTime%20\ge%20\max(\frac{NF}{u},\frac{F}{d_m}))，注意是大於等於，右邊是最理想情況。只要沒有客戶端的網速是極度龜速，通常瓶頸都是出現在 server 端。
+
+
+> #### P2P 點對點連線
+
+和 `client-server` 差不多，但是 server 只需上傳一次，且多了其他的 peer，所以總體的時間會變成 
+
+![u+sigma ui](https://latex.codecogs.com/png.image?\dpi{110}%20\frac{NF}{u+\sum_{i=1}^Nu_i})
+
+可得
+
+![p2p max](https://latex.codecogs.com/png.image?\dpi{110}%20DistributionTime%20\ge%20\max%20(\frac{NF}{u+\sum_{i=1}^Nu_i},%20\frac{F}{u},%20\frac{F}{d_m}))
+
+所以如果使用者人數 N 上升，那麼檔案分享時間的成長幅度會比 client-server 的方式叫平緩。
+
+![cs and p2p time](imgs/cs%20and%20p2p%20time.png)
+
+[CS_vs_P2P 練習](https://gaia.cs.umass.edu/kurose_ross/interactive/CS_vs_P2P_download.php)
+
+### **BitTorrent**
+名詞解釋
+- tracker: 可以當成 indexed server
+- torrent: 一個網路拓樸
+
+#### 原理
+
+把檔案切成許多的 chunk，使用者下載時根據哪個 peer 有需要的 chunk 就可以直接要資料了。取得資料後也能成為一個 peer，提供資料給其他人。當取得所有資料後可以選擇直接離開，或是直接留在 torrent。
+
+BitTorrent 有使用到一種 tit-for-tat 的 trading algorithm，只要不分享給別人，自己的下載速度也會跟著下降。
+
+
+## 2.6 Video Streaming and Content Distribution Networks
+
+### 2.6.1 Internet Video
+
+影片是由許多幀的圖片所構成，一個圖片又是以許多的 pixel 所構成，如此一來如果沒有作特殊處理檔案會十分巨大，編碼 (coding) 就是在做這件事情。
+
+- CBR(constant bit rate): video encoding rate fixed
+- VBR(variable bit rate): video encoding rate chages as amount of spatial, temporal coding changes (居多)
+
+#### 播放預錄影片
+
+一邊傳送影片，客戶端一邊播放。
+
+![streaming stored video](imgs/streaming%20stored%20video.png)
+
+#### 播放暫存 (buffer)
+
+收到一定資料量再播放。
+
+![playout buffering](imgs/playout%20buffering.png)
+
+### 2.6.2 HTTP Streaming and DASH
+
+DASH(Dynamic Adaptive Streaming over HTTP) 在 http 的基礎上新增功能，server 端的影片用多種的 bit rate 來編碼，這樣就有不同的畫面品質(版本)。使用者每隔一段時間請求一個片段，接著再依據使用者的可以接受的頻寬來選擇想要的編碼品質。
+
+在 server 那一邊有 `manifest file` 提供不同版本的影片的 URL，客戶端發起請求後根據 manifest file 下載影片片段，同時也量測網路頻寬，如果現在 buffer 夠多那就選擇高畫質，反之亦然。
+
+### 2.6.3 Content Distribution Networks(CDN)
+
+CDN 的運作思想就是把資料放在離使用者較近的地方，以達成分散的方式，具體作法就是跟各地網路業者租借伺服器來擺放資料。
+
+- Enter Deep: 跟 ISP 業者買伺服器架設在他們的伺服器。
+- Bring Home: 把資料放在 IXPs(Internet exchange points)。
+
+CDN 傳遞示意圖
+
+![dns redirect](imgs/DNS%20redirect.png)
+
+#### 選擇 CDN 伺服器
+
+- geographically closest: 選擇地理上最近的，優點是大部分速度都滿快的，缺點是少數用戶地理上最近可能不是最佳解
+- real-time measurements: CDN 定時 ping 用戶，實際量測時間選擇最佳解，缺點是大部分 local DNS 沒有設定應對這樣的 response。
+
+## 2.7 Socket Programming: Creating Network Applications
+
+略
+
