@@ -52,6 +52,7 @@ Client 若要與 server 聯繫，需要知道 server 的位址。Client 在主�
 - 80 port (Http 協議通道)
 - 25 port (Mail 協議通道)
 - 443 port (Https 協議通道)
+- 53 port (DNS)
 
 
 
